@@ -1,93 +1,93 @@
 # wtodo
 
-会话收尾时把工作落盘成 todo，提醒你换会话，新会话再读回来接着干。
+At the end of a session, write the work down as a todo, warn you that context is full, and in the next session read it back and continue.
 
-一个 [Agent Skill](https://code.claude.com/docs/en/skills)（`SKILL.md` 格式，DSH / Claude Code / Codex 通用）。
+An [Agent Skill](https://code.claude.com/docs/en/skills) (`SKILL.md` format — works with DSH, Claude Code, and Codex).
 
-## 解决什么
+## The problem
 
-长会话干到最后上下文快满了：开始压缩、忘细节、复述不出开头说过什么。这时候收工，下次会话就像失忆，一切从头问。
+A long session runs out of context: compaction starts, details get lost, and the AI can no longer recall what you said at the beginning. You wrap up, and the next session starts like amnesia — everything has to be re-explained.
 
-wtodo 定了个三步闭环：
+wtodo closes the loop in three steps:
 
-1. **收尾** —— 会话要结束时判定上下文是否超过 70%
-2. **落盘** —— 超了就写/更新 cwd 里的 `todo_<yymmdd>.md`（沿用既有 todo 格式，旧内容折进 `<details>` 不丢）
-3. **恢复** —— 新会话第一件事读最新那份 todo，3–5 行复述「上次做到哪 / 下一步 / 坑」，从没打勾的条目接着干
+1. **Wrap up** — when a session is ending, decide whether context is over 70%
+2. **Write it down** — if it is, write or update `todo_<yymmdd>.md` in the cwd (existing todo format, old content folded into `<details>` so nothing is lost)
+3. **Restore** — the first thing a new session does is read the newest todo, restate in 3–5 lines "where we left off / what is next / the pitfalls", and continue from the unchecked items
 
-## 什么时候触发
+## When it triggers
 
-| 场景 | 用户会说的话 |
+| Situation | What the user says |
 |---|---|
-| 会话收尾 | 收工 / 结束 / 先这样 / 就这样吧 / 再见 / done |
-| 换会话 | 新会话 / 重启 session / 刷新 / 换个对话 / 重新开始 |
-| 新会话开工 | 继续 / 接着上次 / 上次做到哪了 |
-| 上下文吃紧 | 出现过 compaction、工具输出被截断、或已复述不出会话开头 |
+| Wrapping up | wrap up / done / that's it / goodbye / 收工 / 结束 / 先这样 / 再见 / done |
+| Switching sessions | new session / restart session / refresh / start over / 新会话 / 重启 session / 换个对话 |
+| Starting a new session | continue / pick up where we left off / where did we stop / 继续 / 接着上次 / 上次做到哪了 |
+| Context is tight | a compaction happened, a tool output was truncated, or the AI can no longer recall the opening |
 
-## 关于「>70%」的诚实说明
+## An honest note about "over 70%"
 
-**模型看不到 DSH 的精确上下文百分比**（没有对应的工具/接口）。所以 wtodo 不假装知道数字，而是走证据链，并在提醒里写明依据：
+**The model cannot see DSH's exact context percentage** — there is no tool or API for it. So wtodo never pretends to know the number. It walks an evidence chain and states which evidence it used:
 
-| 优先级 | 证据 | 结论 |
+| Priority | Evidence | Conclusion |
 |---|---|---|
-| 1 | 用户给的数字（「现在 78%」、贴了状态栏） | 以它为准 |
-| 2 | 本会话出现过 compaction，或工具输出被截断 | 按 **>70%** 处理（默认 60% 就触发压缩） |
-| 3 | 用户消息 > 25 轮，或复述不出开头 3 轮 | 按 **估算 >70%** 处理，注明是估算 |
-| 4 | 以上都不成立 | 报「未达 70%」，只更新 todo，不劝换会话 |
+| 1 | The user gives a number ("it's at 78%", pastes the status bar) | Use their number |
+| 2 | A compaction happened, or a tool output was truncated | Treat as **>70%** (compaction triggers at 60% by default) |
+| 3 | More than 25 user turns, or the first 3 turns cannot be recalled | Treat as **estimated >70%**, say it is an estimate |
+| 4 | None of the above | Report "under 70%", update the todo, do not push a new session |
 
-拿不准就问一句：「顶栏显示的上下文是多少？」
+If unsure, ask one question: "What does the context percentage in the top bar show?"
 
-## 里面有什么
+## What's inside
 
-| 段落 | 内容 |
+| Section | Content |
 |---|---|
-| 铁律 | 工作不落盘，不许结束会话 |
-| 判定表 | 上面那 4 级证据链 |
-| 写 todo | `todo_261002.md` 落在会话 cwd；命名 = `todo_` + 两位年月日 |
-| todo 格式 | `## 主题` 分组、`- [x]`/`- [ ]`、必须有「关键决定」和「坑」两节 |
-| 提醒模板 | ≤4 行：百分比 + 依据 + 已写入的文件 + 建议开新会话 |
-| 新会话恢复 | glob 取文件名最大的 `todo_*.md` → 复述进度 → 接着干，不重新问需求 |
-| 别做过头 | 一次会话最多劝一次换会话；不删旧 todo；用户说「别写文件」就不写 |
+| Iron law | no work left unwritten when a session ends |
+| Evidence table | the 4-level chain above |
+| Writing the todo | `todo_261002.md` lands in the session cwd; name = `todo_` + two-digit year/month/day |
+| Todo format | `## Topic` grouping, `- [x]` / `- [ ]`, "Key decisions" and "Pitfalls" sections are mandatory |
+| Reminder template | ≤4 lines: percentage + evidence + file written + recommend a new session |
+| New-session restore | glob the largest `todo_*.md` filename → restate progress → continue, without re-asking the requirements |
+| Don't overdo it | warn about switching sessions at most once per session; never delete old todos; if the user says "don't write files", don't |
 
-## 安装
+## Install
 
 ```powershell
-# 全局：所有项目都能用
+# Global: available in every project
 git clone https://github.com/huhahacn/wtodo "$env:USERPROFILE\.agents\skills\wtodo"
 
-# 只给当前项目用
+# Current project only
 git clone https://github.com/huhahacn/wtodo ".\.dsh\skills\wtodo"
 ```
 
-| 工具 | 技能根 |
+| Tool | Skill roots |
 |---|---|
-| DSH | `~/.dsh/skills/`、`~/.agents/skills/`、`<项目>/.dsh/skills/`、`<项目>/.agents/skills/` |
+| DSH | `~/.dsh/skills/`, `~/.agents/skills/`, `<project>/.dsh/skills/`, `<project>/.agents/skills/` |
 | Claude Code | `~/.claude/skills/` |
 | Codex | `~/.agents/skills/` |
 
-也可以手动把 `SKILL.md` 放到 `<技能根>\wtodo\SKILL.md`。
+Or copy `SKILL.md` manually to `<skill root>\wtodo\SKILL.md`.
 
-## 用法
+## Usage
 
-装好即自动触发。想手动叫：DSH 里输入 `/wtodo`，或直接说「写个 todo，我要换会话」。
+It fires automatically once installed. To call it by hand: type `/wtodo` in DSH, or just say "write a todo, I'm switching sessions".
 
-配套文件长这样（放在会话工作目录）：
+The output looks like this, in the session working directory:
 
 ```markdown
 # todo_261002.md
 
-> 自动生成于 2026-10-02 · wtodo
+> auto-generated 2026-10-02 · wtodo
 
-## 工作区挂载插件
-- [x] 修好 attach 按钮的 chip 插入（lib/client/chip.js）
-- [ ] 补 route.test.js 的边界用例
+## Mounting a workspace plugin
+- [x] Fixed chip insertion for the attach button (lib/client/chip.js)
+- [ ] Add edge cases to route.test.js
 
-## 关键决定
-- 用 junction 而不是 symlink，Windows 免管理员
+## Key decisions
+- Used a junction instead of a symlink, no admin rights needed on Windows
 
-## 坑
-- pwsh 在 workspace-write 沙箱下启动即 0xC0000142，命令必须提权
+## Pitfalls
+- pwsh exits with 0xC0000142 under the workspace-write sandbox; commands need escalation
 ```
 
-## 许可
+## License
 
-MIT，见 [LICENSE](LICENSE)。随便用、随便改、随便发。
+MIT — see [LICENSE](LICENSE). Use it, change it, ship it.
